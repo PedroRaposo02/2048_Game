@@ -1,0 +1,11 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Font import */
+@font-face {
+    font-family: 'Clear Sans';
+    src: url('/fonts/clear-sans/ClearSans-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+  }
