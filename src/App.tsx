@@ -8,7 +8,7 @@ import GameProvider from "./contexts/game-context";
 
 function App() {
 	return (
-		<main className="h-full w-screen bg-background_color text-text_color flex flex-col items-center justify-center">
+		<main className="h-full w-full bg-background_color text-text_color flex flex-col items-center justify-center">
 			<p className="fixed opacity-65 bg-cell1_color text-background_color rounded-bl-md px-5 py-1 text-center font-bold text-[12px] top-0 right-0 font-sans cursor-pointer">
 				Send Feedback
 			</p>
