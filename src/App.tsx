@@ -5,8 +5,14 @@ import Title from "./components/Title";
 import Score from "./components/Score";
 import NewGameButton from "./components/NewGameButton";
 import GameProvider from "./contexts/game-context";
+import { GridSize } from "./types";
 
 function App() {
+	let gridSize : GridSize = {
+		rows: 4,
+		columns: 4
+	};
+
 	return (
 		<main className="h-full w-full bg-background_color text-text_color flex flex-col items-center justify-center">
 			<p className="fixed opacity-65 bg-cell1_color text-background_color rounded-bl-md px-5 py-1 text-center font-bold text-[12px] top-0 right-0 font-sans cursor-pointer">
@@ -15,7 +21,7 @@ function App() {
 			<div className="fixed top-[78%] left-0 text-center rounded-r-md p-[5px] flex items-center justify-center bg-grid_color">
 				<IoMdSettings className=" text-background_color" />
 			</div>
-			<GameProvider>
+			<GameProvider gridSize={gridSize}>
 				<div className="h-full w-[500px] flex flex-col items-center justify-center gap-5 my-10">
 					<div className="flex w-full justify-between items-center">
 						<Title />
