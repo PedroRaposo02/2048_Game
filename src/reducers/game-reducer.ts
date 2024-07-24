@@ -10,7 +10,8 @@ export type GameAction =
 	| { type: "SET_SCORE"; score: number }
 	| { type: "SET_BEST_SCORE"; bestScore: number }
 	| { type: "ADD_SCORE"; score: number }
-	| { type: "RESET_GAME"; gridSize: GridSize };
+	| { type: "RESET_GAME"; gridSize: GridSize }
+  | { type: "GAME_OVER" };
 
 export const ADD_CELL: GameAction = ({ type: "ADD_CELL" });
 export const MOVE_TILES = (direction: TileDirection): GameAction => ({ type: "MOVE_TILES", direction });
@@ -20,12 +21,14 @@ export const SET_SCORE = (score: number): GameAction => ({ type: "SET_SCORE", sc
 export const SET_BEST_SCORE = (bestScore: number): GameAction => ({ type: "SET_BEST_SCORE", bestScore });
 export const ADD_SCORE = (score: number): GameAction => ({ type: "ADD_SCORE", score });
 export const RESET_GAME = (gridSize: GridSize): GameAction => ({ type: "RESET_GAME", gridSize });
+export const GAME_OVER: GameAction = ({ type: "GAME_OVER" });
 
 export type GameState = {
 	grid: Cell[];
 	score: number;
 	bestScore: number;
 	gridSize: GridSize;
+  isGameOver: boolean;
 };
 
 const initialState: GameState = {
@@ -33,13 +36,13 @@ const initialState: GameState = {
   score: 0,
   bestScore: 0,
   gridSize: { rows: 4, columns: 4 },
+  isGameOver: false
 };
 
 export const cellReducer = (state: GameState, action: GameAction): GameState => {
   switch (action.type) {
     case "ADD_CELL":
       const newCell = addTileToGrid(state.grid, state.gridSize);
-      console.log(newCell);
       
       if (newCell.value === 0) {
         return state;
@@ -93,33 +96,37 @@ export const cellReducer = (state: GameState, action: GameAction): GameState => 
       return { ...state, score: state.score + action.score };
     case "RESET_GAME":
       return { ...initialState, gridSize: state.gridSize };
+    case "GAME_OVER":
+      state.isGameOver = true;
+      if (state.score > state.bestScore) {
+        state.bestScore = state.score
+      }
+      return state;
     default:
       throw new Error("Unknown action type!");
   }
 };
 
 function getEmptyCells(currentGrid: Cell[], gridSize: GridSize) : Cell[] {
-  console.log("Current", currentGrid);
   let array = [...Array(gridSize.rows * gridSize.columns)]
     .map((_, i) => {
       const row = Math.floor(i / 4);
       const col = i % 4;
 
-      return { row, col, value: 0, id: "" } as Cell;
+      return { row, col, value: 0, id: "", isNew: false, previousPos: {row, col} } as Cell;
     })
     .filter((cell) => {
       return !currentGrid.some((gridCell) => {
         return gridCell.id !== '' && gridCell.value !== 0 && gridCell.row === cell.row && gridCell.col === cell.col;
       });
     });
-  console.log("empty", array);
   return array;
   
 } 
 
 function addTileToGrid(grid: Cell[], gridSize: GridSize): Cell {
   const isFour = Math.random() < CHANCE_OF_FOUR;
-  let newCell : Cell = { row: 0, col: 0, value: 0, id: "" };
+  let newCell : Cell = { row: 0, col: 0, value: 0, id: "", isNew: false, previousPos: { row: 0, col: 0 } };
 
   const emptyCells: Cell[] = getEmptyCells(grid, gridSize);
 
@@ -131,7 +138,9 @@ function addTileToGrid(grid: Cell[], gridSize: GridSize): Cell {
       row,
       col,
       value: isFour ? 4 : 2,
-      id: uuid()
+      id: uuid(),
+      isNew: true,
+      previousPos: { row, col }
     };
   }
   return newCell;
@@ -140,6 +149,14 @@ function addTileToGrid(grid: Cell[], gridSize: GridSize): Cell {
 function initializeGrid(gridSize: GridSize): Cell[] {
   let newGrid: Cell[] = [];
   let randomNumberOfCells = Math.floor(Math.random() * 2) + 1;
+    
+  for (let filled = 0; filled < gridSize.rows * gridSize.columns; filled++) {
+    if (!newGrid[filled]) {
+      let row = Math.floor(filled / gridSize.rows);
+      let col = filled % gridSize.columns;
+      newGrid[filled] = { row, col, value: 0, id: "", isNew: false, previousPos: { row: 0, col: 0 } };
+    }
+  }
   for (let i = 0; i < randomNumberOfCells; i++) {
     let newCell = addTileToGrid(newGrid, gridSize)
     newGrid[newCell.row * gridSize.rows + newCell.col] = newCell;
@@ -151,14 +168,11 @@ function initializeGrid(gridSize: GridSize): Cell[] {
 function moveTilesDown(state: GameState): Cell[] {
   let mergedCache = new Set<Cell>();
   let gridCopy = [...state.grid];
-  
-  for (let filled = 0; filled < state.gridSize.rows * state.gridSize.columns; filled++) {
-    if (!gridCopy[filled]) {
-      let row = Math.floor(filled / state.gridSize.rows);
-      let col = filled % state.gridSize.columns;
-      gridCopy[filled] = { row, col, value: 0, id: "" };
-    }
-  }
+
+  gridCopy = gridCopy.map((cell) => ({
+    ...cell,
+    previousPos: { row: cell.row, col: cell.col }
+  }))
 
   for (let rowIndex = state.gridSize.rows - 1; rowIndex >= 0; rowIndex--) {
     for (let colIndex = 0; colIndex < state.gridSize.columns; colIndex++) {
@@ -167,9 +181,11 @@ function moveTilesDown(state: GameState): Cell[] {
       }
       let currentCell = gridCopy[rowIndex * state.gridSize.rows + colIndex];
 
-      if (!currentCell.value || currentCell.value === 0 || !currentCell.id || currentCell.id === "") {
+      if (!currentCell.value || currentCell.value === 0 || currentCell.id === "") {
         continue;
       }
+
+      currentCell.isNew = false;
       
       const canMoveCell = canMove(gridCopy, state.gridSize, currentCell, "down", mergedCache);
       unassignCell(rowIndex, colIndex, gridCopy, state.gridSize);
@@ -178,6 +194,7 @@ function moveTilesDown(state: GameState): Cell[] {
         ...currentCell,
         value: canMoveCell.merge ? currentCell.value * 2 : currentCell.value,
         row: newRowIndex,
+        previousPos: { row: rowIndex, col: colIndex }
       };
       gridCopy[newRowIndex * state.gridSize.rows + colIndex] = currentCell;
       if (canMoveCell.merge) {
@@ -185,12 +202,15 @@ function moveTilesDown(state: GameState): Cell[] {
       }
     }
   }
+  mergedCache.forEach((cell) => {
+    state.score += cell.value;
+  });
 
   return gridCopy;
 }
 
 function unassignCell(row: number, col: number, grid: Cell[], gridSize: GridSize) {
-  grid[row * gridSize.rows + col] = { row, col, value: 0, id: "" };
+  grid[row * gridSize.rows + col] = { row, col, value: 0, id: "", previousPos : { row, col }, isNew: false };
 }
 
 function canMove(

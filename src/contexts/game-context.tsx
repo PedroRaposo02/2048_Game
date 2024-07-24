@@ -4,6 +4,7 @@ import { GridSize, TileDirection } from "../types";
 import {
 	ADD_CELL,
 	cellReducer,
+	GAME_OVER,
 	GameState,
 	INITIALIZE_GRID,
 	MOVE_TILES,
@@ -34,6 +35,7 @@ function GameProvider({
 		score: 0,
 		bestScore: 0,
 		gridSize,
+		isGameOver: false
 	};
 
 	const [state, dispatch] = useReducer(cellReducer, initialState);
@@ -50,6 +52,44 @@ function GameProvider({
 	function moveTiles(direction: TileDirection) {
 		dispatch(MOVE_TILES(direction));
 		dispatch(ADD_CELL);
+		if (isGameOver(state)) {
+			dispatch(GAME_OVER);
+		}
+	}
+
+	function isGameOver({grid, gridSize}: GameState): boolean {
+		console.log(grid);
+		
+		if (grid.some((cell) => cell.value === 0 || cell.id === "")) {
+			return false;
+		}
+		for (const cell of grid) {
+			if (cell.col < gridSize.columns - 1) {
+				const rightCell = grid[cell.row * gridSize.rows + cell.col + 1];
+				if (rightCell.value === cell.value) {
+					return false;
+				}
+			}
+			if (cell.row < gridSize.rows - 1) {
+				const bottomCell = grid[(cell.row + 1) * gridSize.rows + cell.col];
+				if (bottomCell.value === cell.value) {
+					return false;
+				}
+			}
+			if (cell.col > 0) {
+				const leftCell = grid[cell.row * gridSize.rows + cell.col - 1];
+				if (leftCell.value === cell.value) {
+					return false;
+				}
+			}
+			if (cell.row > 0) {
+				const topCell = grid[(cell.row - 1) * gridSize.rows + cell.col];
+				if (topCell.value === cell.value) {
+					return false;
+				}
+			}
+		}
+		return true;
 	}
 
 	useEffect(() => {
