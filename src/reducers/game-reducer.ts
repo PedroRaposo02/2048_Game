@@ -1,5 +1,5 @@
 import { CHANCE_OF_FOUR } from "../constants";
-import { Cell, GridSize, TCanMove, TileDirection } from "../types";
+import { Cell, GridSize, TCanMove, TileDirection, TMoved } from "../types";
 import { v4 as uuid } from "uuid";
 
 export type GameAction =
@@ -55,24 +55,29 @@ export const cellReducer = (state: GameState, action: GameAction): GameState => 
         grid: updatedGrid,
       };
     case "MOVE_TILES":
-      let movedGrid;
+      let movedObj : TMoved;
       switch (action.direction) {
         case "up":
-          movedGrid = moveTilesUp(state);
+          movedObj = moveTilesUp(state);
           break;
         case "down":
-          movedGrid = moveTilesDown(state);
+          movedObj = moveTilesDown(state);
           break;
         case "left":
-          movedGrid = moveTilesLeft(state);
+          movedObj = moveTilesLeft(state);
           break;
         case "right":
-          movedGrid = moveTilesRight(state);
+          movedObj = moveTilesRight(state);
           break;
       }
+
+      movedObj.mergedCache.forEach((cell) => {
+        state.score += cell.value;
+        state.bestScore = Math.max(state.bestScore, state.score);
+      });
       return {
         ...state,
-        grid: movedGrid
+        grid: movedObj.grid
       };
     case "UPDATE_CELL":
       let cell = state.grid.find((cell) => cell.id === action.cell.id);
@@ -165,7 +170,7 @@ function initializeGrid(gridSize: GridSize): Cell[] {
   return newGrid;
 }
 
-function moveTilesDown(state: GameState): Cell[] {
+function moveTilesDown(state: GameState): TMoved {
   let mergedCache = new Set<Cell>();
   let gridCopy = [...state.grid];
 
@@ -202,11 +207,142 @@ function moveTilesDown(state: GameState): Cell[] {
       }
     }
   }
-  mergedCache.forEach((cell) => {
-    state.score += cell.value;
-  });
+  return {
+    grid: gridCopy,
+    mergedCache: mergedCache
+  };
+}
 
-  return gridCopy;
+function moveTilesUp(state: GameState): TMoved {
+  let mergedCache = new Set<Cell>();
+  let gridCopy = [...state.grid];
+
+  gridCopy = gridCopy.map((cell) => ({
+    ...cell,
+    previousPos: { row: cell.row, col: cell.col }
+  }))
+
+  for (let rowIndex = 0; rowIndex < state.gridSize.rows; rowIndex++) {
+    for (let colIndex = 0; colIndex < state.gridSize.columns; colIndex++) {
+      if(!gridCopy[rowIndex * state.gridSize.rows + colIndex]) {
+        continue;
+      }
+      let currentCell = gridCopy[rowIndex * state.gridSize.rows + colIndex];
+
+      if (!currentCell.value || currentCell.value === 0 || currentCell.id === "") {
+        continue;
+      }
+
+      currentCell.isNew = false;
+      
+      const canMoveCell = canMove(gridCopy, state.gridSize, currentCell, "up", mergedCache);
+      unassignCell(rowIndex, colIndex, gridCopy, state.gridSize);
+      const newRowIndex = rowIndex - canMoveCell.spaces;
+      currentCell = {
+        ...currentCell,
+        value: canMoveCell.merge ? currentCell.value * 2 : currentCell.value,
+        row: newRowIndex,
+        previousPos: { row: rowIndex, col: colIndex }
+      };
+      gridCopy[newRowIndex * state.gridSize.rows + colIndex] = currentCell;
+      if (canMoveCell.merge) {
+        mergedCache.add(currentCell);
+      }
+    }
+  }
+
+  return {
+    grid: gridCopy,
+    mergedCache: mergedCache
+  };
+}
+
+function moveTilesLeft(state: GameState): TMoved {
+  let mergedCache = new Set<Cell>();
+  let gridCopy = [...state.grid];
+
+  gridCopy = gridCopy.map((cell) => ({
+    ...cell,
+    previousPos: { row: cell.row, col: cell.col }
+  }))
+
+  for (let colIndex = 0; colIndex < state.gridSize.columns; colIndex++) {
+    for (let rowIndex = 0; rowIndex < state.gridSize.rows; rowIndex++) {
+      if(!gridCopy[rowIndex * state.gridSize.rows + colIndex]) {
+        continue;
+      }
+      let currentCell = gridCopy[rowIndex * state.gridSize.rows + colIndex];
+
+      if (!currentCell.value || currentCell.value === 0 || currentCell.id === "") {
+        continue;
+      }
+
+      currentCell.isNew = false;
+      
+      const canMoveCell = canMove(gridCopy, state.gridSize, currentCell, "left", mergedCache);
+      unassignCell(rowIndex, colIndex, gridCopy, state.gridSize);
+      const newColIndex = colIndex - canMoveCell.spaces;
+      currentCell = {
+        ...currentCell,
+        value: canMoveCell.merge ? currentCell.value * 2 : currentCell.value,
+        col: newColIndex,
+        previousPos: { row: rowIndex, col: colIndex }
+      };
+      gridCopy[rowIndex * state.gridSize.rows + newColIndex] = currentCell;
+      if (canMoveCell.merge) {
+        mergedCache.add(currentCell);
+      }
+    }
+  }
+
+  return {
+    grid: gridCopy,
+    mergedCache: mergedCache
+  };
+}
+
+function moveTilesRight(state: GameState): TMoved {
+  let mergedCache = new Set<Cell>();
+  let gridCopy = [...state.grid];
+
+  gridCopy = gridCopy.map((cell) => ({
+    ...cell,
+    previousPos: { row: cell.row, col: cell.col }
+  }))
+
+  for (let colIndex = state.gridSize.columns - 1; colIndex >= 0; colIndex--) {
+    for (let rowIndex = 0; rowIndex < state.gridSize.rows; rowIndex++) {
+      if(!gridCopy[rowIndex * state.gridSize.rows + colIndex]) {
+        continue;
+      }
+      let currentCell = gridCopy[rowIndex * state.gridSize.rows + colIndex];
+
+      if (!currentCell.value || currentCell.value === 0 || currentCell.id === "") {
+        continue;
+      }
+
+      currentCell.isNew = false;
+      
+      const canMoveCell = canMove(gridCopy, state.gridSize, currentCell, "right", mergedCache);
+      unassignCell(rowIndex, colIndex, gridCopy, state.gridSize);
+      const newColIndex = colIndex + canMoveCell.spaces;
+      currentCell = {
+        ...currentCell,
+        value: canMoveCell.merge ? currentCell.value * 2 : currentCell.value,
+        col: newColIndex,
+        previousPos: { row: rowIndex, col: colIndex }
+      };
+      gridCopy[rowIndex * state.gridSize.rows + newColIndex] = currentCell;
+      if (canMoveCell.merge) {
+        mergedCache.add(currentCell);
+      }
+    }
+  }
+
+  return {
+    grid: gridCopy,
+    mergedCache: mergedCache
+  };
 }
 
 function unassignCell(row: number, col: number, grid: Cell[], gridSize: GridSize) {
@@ -269,127 +405,101 @@ function canMoveDown(grid: Cell[], gridSize: GridSize, cell: Cell, mergedCache: 
 function canMoveUp(grid: Cell[], gridSize: GridSize, cell: Cell, mergedCache: Set<Cell>): TCanMove {
   let canMove: TCanMove = { spaces: 0, merge: false };
 
-  if (cell.row == 0) {
+  if (cell.row === 0) {
     return canMove;
   }
   let sameNumber = 0;
 
   for (let rowIndex = cell.row - 1; rowIndex >= 0; rowIndex--) {
-    const currentCell = grid[rowIndex][cell.col];
-    if (currentCell == 0 || currentCell == cell.value) {
+    const currentCell = grid[rowIndex * gridSize.rows + cell.col];
+
+    if (!currentCell) {
       canMove.spaces++;
-      if (currentCell == cell.value) {
+      continue;
+    }
+    if (mergedCache.has(currentCell)) {
+      break;
+    }
+
+    if ((currentCell.value === 0 || currentCell.value === cell.value) && currentCell.id !== cell.id ) {
+      canMove.spaces++;
+      if (currentCell.value === cell.value) {
         sameNumber++;
       }
     } else {
       break;
     }
   }
-  if (sameNumber % 2 == 1) {
+  if (sameNumber % 2 === 1) {
     canMove.merge = true;
   }
   return canMove;
 }
+
 function canMoveLeft(grid: Cell[], gridSize: GridSize, cell: Cell, mergedCache: Set<Cell>): TCanMove {
-  throw new Error("Function not implemented.");
+  let canMove: TCanMove = { spaces: 0, merge: false };
+
+  if (cell.col === 0) {
+    return canMove;
+  }
+  let sameNumber = 0;
+
+  for (let colIndex = cell.col - 1; colIndex >= 0; colIndex--) {
+    const currentCell = grid[cell.row * gridSize.rows + colIndex];
+
+    if (!currentCell) {
+      canMove.spaces++;
+      continue;
+    }
+    if (mergedCache.has(currentCell)) {
+      break;
+    }
+
+    if ((currentCell.value === 0 || currentCell.value === cell.value) && currentCell.id !== cell.id ) {
+      canMove.spaces++;
+      if (currentCell.value === cell.value) {
+        sameNumber++;
+      }
+    } else {
+      break;
+    }
+  }
+  if (sameNumber % 2 === 1) {
+    canMove.merge = true;
+  }
+  return canMove;
 }
+
 function canMoveRight(grid: Cell[], gridSize: GridSize, cell: Cell, mergedCache: Set<Cell>): TCanMove {
-  throw new Error("Function not implemented.");
+  let canMove: TCanMove = { spaces: 0, merge: false };
+
+  if (cell.col === gridSize.columns - 1) {
+    return canMove;
+  }
+  let sameNumber = 0;
+
+  for (let colIndex = cell.col + 1; colIndex < gridSize.columns; colIndex++) {
+    const currentCell = grid[cell.row * gridSize.rows + colIndex];
+
+    if (!currentCell) {
+      canMove.spaces++;
+      continue;
+    }
+    if (mergedCache.has(currentCell)) {
+      break;
+    }
+
+    if ((currentCell.value === 0 || currentCell.value === cell.value) && currentCell.id !== cell.id ) {
+      canMove.spaces++;
+      if (currentCell.value === cell.value) {
+        sameNumber++;
+      }
+    } else {
+      break;
+    }
+  }
+  if (sameNumber % 2 === 1) {
+    canMove.merge = true;
+  }
+  return canMove;
 }
-
-/* 
-	
-
-	
-
-	function testMoveLeft() {
-		grid.map((cell, _) => {
-			cell.col = cell.col - 1;
-		});
-	}
-
-	function moveTilesDown() {
-		let mergedCache = new Set<Cell>();
-		let gridCopy = [...grid];
-
-		for (let rowIndex = gridSize.rows - 1; rowIndex >= 0; rowIndex--) {
-			for (let colIndex = 0; colIndex < gridSize.columns; colIndex++) {
-				let currentCell = {
-					row: rowIndex,
-					col: colIndex,
-					value: grid[rowIndex * gridSize.rows + colIndex].value,
-				} as Cell;
-
-				if (currentCell.value === 0) {
-					continue;
-				}
-				const canMoveCell = canMove(gridCopy, currentCell, "down", mergedCache);
-				currentCell = {
-					...currentCell,
-					value: canMoveCell.merge ? currentCell.value * 2 : currentCell.value,
-					row: rowIndex + canMoveCell.spaces,
-				};
-				if (canMoveCell.merge) {
-					mergedCache.add(currentCell);
-				}
-			}
-		}
-
-		setGrid(gridCopy);
-	}
-
-	function moveTilesUp() {
-		let gridCopy = [...grid]; */
-
-		/* for (let rowIndex = 0; rowIndex < grid.length; rowIndex++) {
-			for (let colIndex = 0; colIndex < grid[rowIndex].length; colIndex++) {
-				const currentCell = {
-					row: rowIndex,
-					col: colIndex,
-					value: grid[rowIndex][colIndex],
-				} as Cell;
-
-				if (currentCell.value === 0) {
-					continue;
-				}
-				const canMoveCell = canMove(gridCopy, currentCell, "up");
-				gridCopy[rowIndex - canMoveCell.spaces][colIndex] = canMoveCell.merge
-					? currentCell.value * 2
-					: currentCell.value;
-				if (canMoveCell.spaces > 0) {
-					gridCopy[rowIndex][colIndex] = 0;
-				}
-			}
-		} */
-
-/* 		setGrid(gridCopy);
-	}
-
-	function moveTilesLeft() {
-		throw new Error("Function not implemented.");
-	}
-	function moveTilesRight() {
-		throw new Error("Function not implemented.");
-	}
-
-	function moveTiles(direction: TileDirection) {
-		switch (direction) {
-			case "down":
-				moveTilesDown();
-				break;
-			case "up":
-				moveTilesUp();
-				break;
-			case "left":
-				// moveTilesLeft();
-				testMoveLeft();
-				break;
-			case "right":
-				moveTilesRight();
-				break;
-		}
-	}
-
-	function checkGameOver(): boolean {
-		throw new Error("Function not implemented.");
-	} */

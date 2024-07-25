@@ -1,6 +1,6 @@
-import { createContext, useEffect, useReducer } from "react";
+import { createContext, useCallback, useEffect, useReducer, useState } from "react";
 import { NUMBER_OF_COLS, NUMBER_OF_ROWS } from "../constants";
-import { GridSize, TileDirection } from "../types";
+import { Cell, GridSize, TileDirection } from "../types";
 import {
 	ADD_CELL,
 	cellReducer,
@@ -39,6 +39,34 @@ function GameProvider({
 	};
 
 	const [state, dispatch] = useReducer(cellReducer, initialState);
+	const [moveInitiated, setMoveInitiated] = useState(false);
+
+	const moveTiles = useCallback((direction: TileDirection) => {
+		setMoveInitiated(true);
+		dispatch(MOVE_TILES(direction));
+	}, []);
+
+	useEffect(() => {
+		if (moveInitiated) {
+			setMoveInitiated(false);
+
+			if(didCellsMove(state.grid)) {
+				dispatch(ADD_CELL);
+			}
+			if(isGameOver(state)) {
+				dispatch(GAME_OVER);
+			}
+		}
+	}, [state.grid, moveInitiated]);
+
+	const didCellsMove = (grid: Cell[]) => {
+		for (let cell of grid) {
+			if (cell.row != cell.previousPos.row || cell.col != cell.previousPos.col) {
+				return true;
+			}
+		}
+		return false;
+	}
 
 	function addCell() {
 		dispatch(ADD_CELL);
@@ -49,16 +77,7 @@ function GameProvider({
 		dispatch(INITIALIZE_GRID(gridSize));
 	}
 
-	function moveTiles(direction: TileDirection) {
-		dispatch(MOVE_TILES(direction));
-		dispatch(ADD_CELL);
-		if (isGameOver(state)) {
-			dispatch(GAME_OVER);
-		}
-	}
-
 	function isGameOver({grid, gridSize}: GameState): boolean {
-		console.log(grid);
 		
 		if (grid.some((cell) => cell.value === 0 || cell.id === "")) {
 			return false;

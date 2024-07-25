@@ -22,9 +22,6 @@
     }
 }
 
-@keyframes slide-cell {
-  
-}
 
 .spawn-scale {
     animation: spawn-scale 0.2s ease-out;

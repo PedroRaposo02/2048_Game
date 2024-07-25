@@ -15,4 +15,9 @@ type TPosition = {
   col: number;
 }
 
+export type TMoved = {
+  mergedCache: Set<Cell>;
+  grid: Cell[];
+}
+
 export type Cell = { row: number; col: number; value: number; id: string; isNew: boolean, previousPos: TPosition };
